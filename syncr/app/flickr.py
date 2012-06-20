@@ -61,8 +61,9 @@ class FlickrSyncr:
             sizes[label] = {'width': None, 'height': None}
         # Set values given by flickr
         for el in result.sizes[0].size:
-            sizes[el['label']]['width'] = el['width']
-            sizes[el['label']]['height'] = el['height']
+            if el['label'] in sizes:
+                sizes[el['label']]['width'] = el['width']
+                sizes[el['label']]['height'] = el['height']
         return sizes
 
     def getPhotoComments(self, photo_id):
@@ -319,6 +320,26 @@ class FlickrSyncr:
         photo_result = self.flickr.photos_getInfo(photo_id = photo_id)
         photo = self._syncPhoto(photo_result, refresh=refresh)
         return photo
+
+    def syncAllPhotos(self, username):
+        """
+        Synchronize all of a flickr user's photos with Django.
+        WARNING: This could take a while!
+
+        Required arguments
+          username: a flickr username as a string
+        """
+        nsid = self.user2nsid(username)
+        per_page = 500
+        result = self.flickr.people_getPhotos(
+            user_id=nsid, per_page=per_page, page=0)
+        page_count = result.photos[0]['pages']
+        self._syncPhotoXMLList(result.photos[0].photo)
+
+        for page in range(1, int(page_count)):
+            result = self.flickr.people_getPhotos(
+                user_id=nsid, per_page=per_page, page=page)
+            self._syncPhotoXMLList(result.photos[0].photo)
 
     def syncAllPublic(self, username):
         """
