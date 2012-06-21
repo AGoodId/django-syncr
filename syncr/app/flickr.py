@@ -295,7 +295,7 @@ class FlickrSyncr:
                                         flickr_id=c['flickr_id'], defaults=c)
         return obj
 
-    def _syncPhotoXMLList(self, photos_xml):
+    def _syncPhotoXMLList(self, photos_xml, only_new=False):
         """
         Synchronize a list of flickr photos with Django ORM.
 
@@ -304,11 +304,18 @@ class FlickrSyncr:
         """
         photo_list = []
         for photo in photos_xml:
+            # Check if photo is already synced
+            if only_new:
+                try:
+                    photo_list.append(Photo.objects.get(flickr_id = photo['id']))
+                    continue
+                except ObjectDoesNotExist:
+                    pass
             photo_result = self.flickr.photos_getInfo(photo_id = photo['id'])
             photo_list.append(self._syncPhoto(photo_result))
         return photo_list
 
-    def syncPhoto(self, photo_id, refresh=False):
+    def syncPhoto(self, photo_id, refresh=False, only_new=False):
         """
         Synchronize a single flickr photo with Django ORM.
 
@@ -317,11 +324,17 @@ class FlickrSyncr:
         Optional Arguments
           refresh: A boolean, if true the Photo will be re-sync'd with flickr
         """
+        # Check if photo is already synced
+        if only_new:
+            try:
+                return Photo.objects.get(flickr_id = photo_id)
+            except ObjectDoesNotExist:
+                pass
         photo_result = self.flickr.photos_getInfo(photo_id = photo_id)
         photo = self._syncPhoto(photo_result, refresh=refresh)
         return photo
 
-    def syncAllPhotos(self, username):
+    def syncAllPhotos(self, username, only_new=False):
         """
         Synchronize all of a flickr user's photos with Django.
         WARNING: This could take a while!
@@ -334,14 +347,14 @@ class FlickrSyncr:
         result = self.flickr.people_getPhotos(
             user_id=nsid, per_page=per_page, page=0)
         page_count = result.photos[0]['pages']
-        self._syncPhotoXMLList(result.photos[0].photo)
+        self._syncPhotoXMLList(result.photos[0].photo, only_new=only_new)
 
         for page in range(1, int(page_count)):
             result = self.flickr.people_getPhotos(
                 user_id=nsid, per_page=per_page, page=page)
-            self._syncPhotoXMLList(result.photos[0].photo)
+            self._syncPhotoXMLList(result.photos[0].photo, only_new=only_new)
 
-    def syncAllPublic(self, username):
+    def syncAllPublic(self, username, only_new=False):
         """
         Synchronize all of a flickr user's photos with Django.
         WARNING: This could take a while!
@@ -359,9 +372,9 @@ class FlickrSyncr:
         for page in range(0, pages):
             result = self.flickr.people_getPublicPhotos(
                 user_id=nsid, per_page=per_page, page=page)
-            self._syncPhotoXMLList(result.photos[0].photo)
+            self._syncPhotoXMLList(result.photos[0].photo, only_new=only_new)
 
-    def syncRecentPhotos(self, username, days=1):
+    def syncRecentPhotos(self, username, days=1, only_new=False):
         """
         Synchronize recent public photos from a flickr user.
 
@@ -380,11 +393,12 @@ class FlickrSyncr:
         page_count = result.photos[0]['pages']
 
         for page in range(1, int(page_count)+1):
-            photo_list = self._syncPhotoXMLList(result.photos[0].photo)
+            photo_list = self._syncPhotoXMLList(result.photos[0].photo,
+                only_new=only_new)
             result = self.flickr.photos_search(user_id=nsid, page=page+1,
                         per_page=500, min_upload_date=timestamp)
 
-    def syncPublicFavorites(self, username):
+    def syncPublicFavorites(self, username, only_new=False):
         """Synchronize a flickr user's public favorites.
 
         Required arguments
@@ -397,7 +411,8 @@ class FlickrSyncr:
         result = self.flickr.favorites_getPublicList(user_id=nsid, per_page=500)
         page_count = int(result.photos[0]['pages'])
         for page in range(1, page_count+1):
-            photo_list = self._syncPhotoXMLList(result.photos[0].photo)
+            photo_list = self._syncPhotoXMLList(result.photos[0].photo,
+                only_new=only_new)
             for photo in photo_list:
                 favList.photos.add(photo)
             if page == 1:
@@ -406,19 +421,21 @@ class FlickrSyncr:
             result = self.flickr.favorites_getPublicList(user_id=nsid,
                         per_page=500, page=page+1)
 
-    def syncPhotoSet(self, photoset_id, order=None):
+    def syncPhotoSet(self, photoset_id, order=None, only_new=False):
         """
         Synchronize a single flickr photo set based on the set id.
 
         Required arguments
           photoset_id: a flickr photoset id number as a string
         """
+        print "Syncing photoset %s" % photoset_id
         photoset_xml = self.flickr.photosets_getInfo(photoset_id = photoset_id)
         nsid = photoset_xml.photoset[0]['owner']
         username = self.flickr.people_getInfo(user_id = nsid).person[0].username[0].text
         result = self.flickr.photosets_getPhotos(photoset_id = photoset_id)
         page_count = int(result.photoset[0]['pages'])
-        primary = self.syncPhoto(photoset_xml.photoset[0]['primary'])
+        primary = self.syncPhoto(photoset_xml.photoset[0]['primary'],
+            only_new=only_new)
 
         d_photoset, created = PhotoSet.objects.get_or_create(
                 flickr_id = photoset_id,
@@ -444,7 +461,8 @@ class FlickrSyncr:
             if page > 1:
                 result = self.flickr.photosets_getPhotos(
                     photoset_id = photoset_id, page = page+1)
-            photo_list = self._syncPhotoXMLList(result.photoset[0].photo)
+            photo_list = self._syncPhotoXMLList(result.photoset[0].photo,
+                only_new=only_new)
             for photo in photo_list:
                 if photo is not None:
                     d_photoset.photos.add(photo)
@@ -454,7 +472,7 @@ class FlickrSyncr:
         d_photoset.order = order
         d_photoset.save()
 
-    def syncAllPhotoSets(self, username):
+    def syncAllPhotoSets(self, username, only_new=False):
         """
         Synchronize all photo sets for a flickr user.
 
@@ -465,4 +483,4 @@ class FlickrSyncr:
         result = self.flickr.photosets_getList(user_id=nsid)
 
         for i, photoset in enumerate(result.photosets[0].photoset):
-            self.syncPhotoSet(photoset['id'], i + 1)
+            self.syncPhotoSet(photoset['id'], i + 1, only_new=only_new)
