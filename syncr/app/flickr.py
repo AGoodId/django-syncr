@@ -23,7 +23,7 @@ class FlickrSyncr:
     This app requires Beej's flickrapi library. Available at:
     http://flickrapi.sourceforge.net/
     """
-    def __init__(self, flickr_key, flickr_secret):
+    def __init__(self, flickr_key, flickr_secret, token=None):
         """
         Construct a new FlickrSyncr object.
 
@@ -31,7 +31,11 @@ class FlickrSyncr:
           flickr_key: a Flickr API key string
           flickr_secret: a Flickr secret key as a string
         """
-        self.flickr = flickrapi.FlickrAPI(flickr_key, flickr_secret, format='xmlnode')
+        if token is not None:
+          self.flickr = flickrapi.FlickrAPI(flickr_key, flickr_secret,
+              token=token, store_token=False, format='xmlnode')
+        else:
+          self.flickr = flickrapi.FlickrAPI(flickr_key, flickr_secret, format='xmlnode')
 
     def user2nsid(self, username):
         """
