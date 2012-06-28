@@ -49,6 +49,18 @@ class FlickrSyncr:
         except AttributeError:
             return " "
 
+    def _people_getInfo(self, nsid):
+        """
+        Fetch the info about a person, and cache results for later checks
+        """
+        if not hasattr(self, '_people_info_cache'):
+            self._people_info_cache = {}
+        try:
+            return self._people_info_cache[nsid]
+        except KeyError:
+            self._people_info_cache[nsid] = self.flickr.people_getInfo(user_id = nsid)
+            return self._people_info_cache[nsid]
+
     # Removed getPhotoSizeURLs() here
 
     def getPhotoSizes(self, photo_id):
@@ -367,8 +379,7 @@ class FlickrSyncr:
           username: a flickr username as a string
         """
         nsid = self.user2nsid(username)
-        count = per_page = int(self.flickr.people_getInfo(
-                user_id=nsid).person[0].photos[0].count[0].text)
+        count = per_page = int(self._people_getInfo(nsid).person[0].photos[0].count[0].text)
         if count >= 500:
             per_page = 500
         pages = count // per_page
@@ -435,7 +446,7 @@ class FlickrSyncr:
         print "Syncing photoset %s" % photoset_id
         photoset_xml = self.flickr.photosets_getInfo(photoset_id = photoset_id)
         nsid = photoset_xml.photoset[0]['owner']
-        username = self.flickr.people_getInfo(user_id = nsid).person[0].username[0].text
+        username = self._people_getInfo(nsid).person[0].username[0].text
         result = self.flickr.photosets_getPhotos(photoset_id = photoset_id)
         page_count = int(result.photoset[0]['pages'])
         primary = self.syncPhoto(photoset_xml.photoset[0]['primary'],
