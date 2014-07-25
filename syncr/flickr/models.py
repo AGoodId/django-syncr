@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils.html import strip_tags
-from django.utils.text import truncate_words
+from django.utils.text import Truncator
 from django.utils.translation import ugettext_lazy as _
 from django.conf import settings
 
@@ -267,6 +267,6 @@ class PhotoComment(models.Model):
         return self.permanent_url
 
     def get_short_comment(self, num=6):
-        return truncate_words(strip_tags(self.comment), num)
+        return Truncator(strip_tags(self.comment)).words(num)
     get_short_comment.short_description = _(u'comment')
 
